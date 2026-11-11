@@ -6,7 +6,8 @@ use foldhash::{HashMap as FoldHashMap, HashMapExt as _};
 use http::header::{HeaderName, HeaderValue};
 use smallvec::{smallvec, SmallVec};
 
-use super::AsHeaderName;
+use super::{AsHeaderName, TryIntoHeaderPair};
+use crate::error::HttpError;
 
 /// A multi-map of HTTP headers.
 ///
@@ -48,6 +49,7 @@ use super::AsHeaderName;
 #[derive(Debug, Clone, Default)]
 pub struct HeaderMap {
     pub(crate) inner: FoldHashMap<HeaderName, Value>,
+    original_names: FoldHashMap<HeaderName, String>,
 }
 
 /// A bespoke non-empty list for HeaderMap values.
@@ -117,7 +119,92 @@ impl HeaderMap {
     pub fn with_capacity(capacity: usize) -> Self {
         HeaderMap {
             inner: FoldHashMap::with_capacity(capacity),
+            original_names: FoldHashMap::with_capacity(capacity),
         }
+    }
+
+    #[doc(hidden)]
+    pub fn original_name<'a>(&'a self, name: &'a HeaderName) -> &'a str {
+        self.original_names
+            .get(name)
+            .map(String::as_str)
+            .unwrap_or_else(|| name.as_str())
+    }
+
+    #[doc(hidden)]
+    pub fn try_insert_header(
+        &mut self,
+        header: impl TryIntoHeaderPair,
+    ) -> Result<Removed, HttpError> {
+        let (name, value, original_name) = header.try_into_pair_with_name().map_err(Into::into)?;
+        Ok(self.insert_named(name, value, original_name))
+    }
+
+    #[doc(hidden)]
+    pub fn try_append_header(&mut self, header: impl TryIntoHeaderPair) -> Result<(), HttpError> {
+        let (name, value, original_name) = header.try_into_pair_with_name().map_err(Into::into)?;
+        self.append_named(name, value, original_name);
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    pub fn insert_with_original_name(
+        &mut self,
+        original_name: &str,
+        value: HeaderValue,
+    ) -> Result<Removed, http::header::InvalidHeaderName> {
+        let name = HeaderName::from_bytes(original_name.as_bytes())?;
+        Ok(self.insert_named(name, value, Some(original_name.to_owned())))
+    }
+
+    #[doc(hidden)]
+    pub fn append_with_original_name(
+        &mut self,
+        original_name: &str,
+        value: HeaderValue,
+    ) -> Result<(), http::header::InvalidHeaderName> {
+        let name = HeaderName::from_bytes(original_name.as_bytes())?;
+        self.append_named(name, value, Some(original_name.to_owned()));
+        Ok(())
+    }
+
+    fn insert_named(
+        &mut self,
+        name: HeaderName,
+        val: HeaderValue,
+        original_name: Option<String>,
+    ) -> Removed {
+        match self.inner.entry(name) {
+            hash_map::Entry::Occupied(mut entry) => {
+                let old_value = std::mem::replace(entry.get_mut(), Value::one(val));
+                Removed::new(Some(old_value))
+            }
+            hash_map::Entry::Vacant(entry) => {
+                let name = entry.key().clone();
+                entry.insert(Value::one(val));
+                let original_name = original_name.unwrap_or_else(|| name.as_str().to_owned());
+                self.original_names.insert(name, original_name);
+                Removed::new(None)
+            }
+        }
+    }
+
+    fn append_named(
+        &mut self,
+        name: HeaderName,
+        value: HeaderValue,
+        original_name: Option<String>,
+    ) {
+        match self.inner.entry(name.clone()) {
+            hash_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().append(value);
+            }
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(Value::one(value));
+                let original_name = original_name.unwrap_or_else(|| name.as_str().to_owned());
+                self.original_names.insert(name, original_name);
+            }
+        };
     }
 
     /// Create new `HeaderMap` from a `http::HeaderMap`-like drain.
@@ -223,6 +310,7 @@ impl HeaderMap {
     /// ```
     pub fn clear(&mut self) {
         self.inner.clear();
+        self.original_names.clear();
     }
 
     fn get_value(&self, key: impl AsHeaderName) -> Option<&Value> {
@@ -385,8 +473,7 @@ impl HeaderMap {
     /// assert!(!removed.is_empty());
     /// ```
     pub fn insert(&mut self, name: HeaderName, val: HeaderValue) -> Removed {
-        let value = self.inner.insert(name, Value::one(val));
-        Removed::new(value)
+        self.insert_named(name, val, None)
     }
 
     /// Appends a name-value pair to the map.
@@ -410,14 +497,7 @@ impl HeaderMap {
     /// assert_eq!(map.len(), 3);
     /// ```
     pub fn append(&mut self, key: HeaderName, value: HeaderValue) {
-        match self.inner.entry(key) {
-            hash_map::Entry::Occupied(mut entry) => {
-                entry.get_mut().append(value);
-            }
-            hash_map::Entry::Vacant(entry) => {
-                entry.insert(Value::one(value));
-            }
-        };
+        self.append_named(key, value, None);
     }
 
     /// Removes all headers for a particular header name from the map.
@@ -458,8 +538,20 @@ impl HeaderMap {
     /// ```
     pub fn remove(&mut self, key: impl AsHeaderName) -> Removed {
         let value = match key.try_as_name(super::as_name::Seal) {
-            Ok(Cow::Borrowed(name)) => self.inner.remove(name),
-            Ok(Cow::Owned(name)) => self.inner.remove(&name),
+            Ok(Cow::Borrowed(name)) => {
+                let value = self.inner.remove(name);
+                if value.is_some() {
+                    self.original_names.remove(name);
+                }
+                value
+            }
+            Ok(Cow::Owned(name)) => {
+                let value = self.inner.remove(&name);
+                if value.is_some() {
+                    self.original_names.remove(&name);
+                }
+                value
+            }
             Err(_) => None,
         };
 
@@ -596,7 +688,9 @@ impl HeaderMap {
 
             // invariant: make sure newly empty value lists are removed
             !vals.is_empty()
-        })
+        });
+        self.original_names
+            .retain(|name, _| self.inner.contains_key(name));
     }
 
     /// Clears the map, returning all name-value sets as an iterator.
@@ -627,6 +721,7 @@ impl HeaderMap {
     /// ```
     pub fn drain(&mut self) -> Drain<'_> {
         let len = self.len();
+        self.original_names.clear();
         Drain::new(self.inner.drain(), len)
     }
 }

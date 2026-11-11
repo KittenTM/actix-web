@@ -171,7 +171,7 @@ pub(crate) trait MessageType: Sized {
         // container's knowledge, this is used to sync the containers cursor after data is written
         let mut pos = 0;
 
-        self.write_headers(|key, value| {
+        self.write_headers(|key, original_name, value| {
             match *key {
                 CONNECTION => return,
                 TRANSFER_ENCODING | CONTENT_LENGTH if skip_len => return,
@@ -179,7 +179,7 @@ pub(crate) trait MessageType: Sized {
                 _ => {}
             }
 
-            let k = key.as_str().as_bytes();
+            let k = original_name.as_bytes();
             let k_len = k.len();
 
             for val in value.iter() {
@@ -253,7 +253,7 @@ pub(crate) trait MessageType: Sized {
 
     fn write_headers<F>(&mut self, mut f: F)
     where
-        F: FnMut(&HeaderName, &Value),
+        F: FnMut(&HeaderName, &str, &Value),
     {
         match self.extra_headers() {
             Some(headers) => {
@@ -262,10 +262,17 @@ pub(crate) trait MessageType: Sized {
                     .inner
                     .iter()
                     .filter(|(name, _)| !headers.contains_key(*name))
-                    .chain(headers.inner.iter())
-                    .for_each(|(k, v)| f(k, v))
+                    .for_each(|(k, v)| f(k, self.headers().original_name(k), v));
+                headers
+                    .inner
+                    .iter()
+                    .for_each(|(k, v)| f(k, headers.original_name(k), v))
             }
-            None => self.headers().inner.iter().for_each(|(k, v)| f(k, v)),
+            None => self
+                .headers()
+                .inner
+                .iter()
+                .for_each(|(k, v)| f(k, self.headers().original_name(k), v)),
         }
     }
 }
