@@ -21,10 +21,9 @@ dependencies = [
 
 [[package]]
 name = "actix-files"
-version = "0.7.4"
+version = "0.7.5"
 dependencies = [
  "actix-http",
- "actix-rt",
  "actix-service",
  "actix-test",
  "actix-utils",
@@ -42,13 +41,14 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tempfile",
+ "tokio",
  "v_htmlescape",
  "winapi-util",
 ]
 
 [[package]]
 name = "actix-http"
-version = "3.21.0"
+version = "3.22.0"
 dependencies = [
  "actix-codec",
  "actix-http-test",
@@ -143,12 +143,11 @@ dependencies = [
 
 [[package]]
 name = "actix-multipart"
-version = "0.8.8"
+version = "0.8.9"
 dependencies = [
  "actix-http",
  "actix-multipart-derive",
  "actix-multipart-rfc7578",
- "actix-rt",
  "actix-test",
  "actix-utils",
  "actix-web",
@@ -260,7 +259,6 @@ dependencies = [
  "actix-codec",
  "actix-http",
  "actix-http-test",
- "actix-rt",
  "actix-service",
  "actix-utils",
  "actix-web",
@@ -321,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "actix-web"
-version = "4.19.0"
+version = "4.20.0"
 dependencies = [
  "actix-codec",
  "actix-files",
@@ -381,11 +379,10 @@ dependencies = [
 
 [[package]]
 name = "actix-web-codegen"
-version = "4.5.0"
+version = "4.6.0"
 dependencies = [
  "actix-macros",
  "actix-router",
- "actix-rt",
  "actix-test",
  "actix-utils",
  "actix-web",
@@ -394,6 +391,7 @@ dependencies = [
  "quote",
  "rustversion-msrv",
  "syn 3.0.9",
+ "tokio",
  "trybuild",
 ]
 

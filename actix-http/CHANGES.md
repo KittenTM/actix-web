@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 3.22.0
+
+- Allow `InfallibleStream` to wrap streams with any item type.
+- Add `InfallibleStream::new()` constructor.
+- The `header::from_comma_delimited()` helper now correctly splits headers containing quoted strings.
+
+## 3.21.3
+
+- Handle quoted-pairs in chunk extensions and reject invalid control bytes inside quoted strings. [GHSA-9543-cj4x-h76q](https://github.com/actix/actix-web/security/advisories/GHSA-9543-cj4x-h76q)
+
+## 3.21.2
+
+- Apply the request head timeout to pipelined HTTP/1.1 partial requests on keep-alive connections. [GHSA-54pm-2wm5-hpmg](https://github.com/actix/actix-web/security/advisories/GHSA-54pm-2wm5-hpmg)
+
+## 3.21.1
+
+- Reject bare LF as trailer terminator after chunked encodings. [GHSA-9w4r-xc43-v236](https://github.com/actix/actix-web/security/advisories/GHSA-9w4r-xc43-v236)
+
 ## 3.21.0
 
 - Enable `TCP_NODELAY` by default.

@@ -201,7 +201,7 @@ mod tests {
         test::TestRequest,
     };
 
-    #[actix_rt::test]
+    #[tokio::test(flavor = "local")]
     async fn customize_responder() {
         let req = TestRequest::default().to_http_request();
         let res = "test"
@@ -249,7 +249,7 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[tokio::test(flavor = "local")]
     async fn tuple_responder_with_status_code() {
         let req = TestRequest::default().to_http_request();
         let res = ("test".to_string(), StatusCode::BAD_REQUEST).respond_to(&req);

@@ -611,7 +611,7 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[tokio::test(flavor = "local")]
     async fn test_camel_case() {
         let mut bytes = BytesMut::with_capacity(2048);
         let mut head = RequestHead::default();
@@ -685,7 +685,7 @@ mod tests {
         assert!(data.contains("date: date\r\n"));
     }
 
-    #[actix_rt::test]
+    #[tokio::test(flavor = "local")]
     async fn test_extra_headers() {
         let mut bytes = BytesMut::with_capacity(2048);
 
@@ -718,7 +718,7 @@ mod tests {
         assert!(data.contains("date: date\r\n"));
     }
 
-    #[actix_rt::test]
+    #[tokio::test(flavor = "local")]
     async fn test_no_content_length() {
         let mut bytes = BytesMut::with_capacity(2048);
 
