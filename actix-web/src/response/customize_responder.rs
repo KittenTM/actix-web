@@ -78,9 +78,12 @@ impl<R: Responder> CustomizeResponder<R> {
     /// ```
     pub fn insert_header(mut self, header: impl TryIntoHeaderPair) -> Self {
         if let Some(inner) = self.inner() {
-            if let Err(err) = inner.override_headers.try_insert_header(header) {
-                self.error = Some(err);
-            }
+            match header.try_into_pair() {
+                Ok((key, value)) => {
+                    inner.override_headers.insert(key, value);
+                }
+                Err(err) => self.error = Some(err.into()),
+            };
         }
 
         self
@@ -107,9 +110,12 @@ impl<R: Responder> CustomizeResponder<R> {
     /// ```
     pub fn append_header(mut self, header: impl TryIntoHeaderPair) -> Self {
         if let Some(inner) = self.inner() {
-            if let Err(err) = inner.append_headers.try_append_header(header) {
-                self.error = Some(err);
-            }
+            match header.try_into_pair() {
+                Ok((key, value)) => {
+                    inner.append_headers.append(key, value);
+                }
+                Err(err) => self.error = Some(err.into()),
+            };
         }
 
         self
@@ -173,16 +179,12 @@ where
             *res.status_mut() = status;
         }
 
-        for (k, v) in self.inner.override_headers.iter() {
-            res.headers_mut()
-                .insert_with_original_name(self.inner.override_headers.original_name(k), v.clone())
-                .expect("stored header name is valid");
+        for (k, v) in self.inner.override_headers {
+            res.headers_mut().insert(k, v);
         }
 
-        for (k, v) in self.inner.append_headers.iter() {
-            res.headers_mut()
-                .append_with_original_name(self.inner.append_headers.original_name(k), v.clone())
-                .expect("stored header name is valid");
+        for (k, v) in self.inner.append_headers {
+            res.headers_mut().append(k, v);
         }
 
         res.map_into_left_body()

@@ -63,13 +63,12 @@ impl DefaultHeaders {
         // standard header terminology `insert` or `append` for this method would make the behavior
         // of this middleware less obvious since it only adds the headers if they are not present
 
-        match Rc::get_mut(&mut self.inner)
-            .expect("All default headers must be added before cloning")
-            .headers
-            .try_append_header(header)
-        {
-            Ok(()) => {}
-            Err(err) => panic!("Invalid header: {err}"),
+        match header.try_into_pair() {
+            Ok((key, value)) => Rc::get_mut(&mut self.inner)
+                .expect("All default headers must be added before cloning")
+                .headers
+                .append(key, value),
+            Err(err) => panic!("Invalid header: {}", err.into()),
         }
 
         self
@@ -178,9 +177,7 @@ where
         // set response headers
         for (key, value) in this.inner.headers.iter() {
             if !res.headers().contains_key(key) {
-                res.headers_mut()
-                    .insert_with_original_name(this.inner.headers.original_name(key), value.clone())
-                    .expect("stored header name is valid");
+                res.headers_mut().insert(key.clone(), value.clone());
             }
         }
 
